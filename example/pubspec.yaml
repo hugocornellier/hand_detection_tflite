@@ -1,0 +1,34 @@
+name: pose_detection_tflite_example
+description: Example app for pose_detection_tflite
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  image: ^4.5.4
+  image_picker: ^1.2.0
+  file_selector: ^1.0.3
+  file_selector_macos: ^0.9.4+2
+  pose_detection_tflite:
+    path: ../
+  flutter_colorpicker: ^1.1.0
+  path_provider: ^2.1.5
+  camera: ^0.11.0+2
+  camera_macos: ^0.0.9
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/samples/
