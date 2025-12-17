@@ -1,29 +1,20 @@
-/// BlazePose model variant for landmark extraction.
+/// Hand landmark model variant for landmark extraction.
 ///
-/// Controls the accuracy/performance trade-off:
-/// - [lite]: Fastest, good accuracy
-/// - [full]: Balanced speed/accuracy
-/// - [heavy]: Slowest, best accuracy
-enum PoseLandmarkModel {
-  /// Fastest model with good accuracy.
-  lite,
-
-  /// Balanced model with medium speed and accuracy.
+/// Only the full model is available to match the Python implementation.
+enum HandLandmarkModel {
+  /// Full model with balanced speed and accuracy.
   full,
-
-  /// Slowest model with best accuracy.
-  heavy,
 }
 
 /// Detection mode controlling the two-stage pipeline behavior.
 ///
 /// - [boxes]: Fast detection returning only bounding boxes (Stage 1 only)
-/// - [boxesAndLandmarks]: Full pipeline returning boxes + 33 landmarks (both stages)
-enum PoseMode {
+/// - [boxesAndLandmarks]: Full pipeline returning boxes + landmarks (both stages)
+enum HandMode {
   /// Fast detection mode returning only bounding boxes (Stage 1 only).
   boxes,
 
-  /// Full pipeline mode returning bounding boxes and 33 landmarks per person.
+  /// Full pipeline mode returning bounding boxes and landmarks per hand.
   boxesAndLandmarks,
 }
 
@@ -65,15 +56,15 @@ enum PerformanceMode {
 /// Example:
 /// ```dart
 /// // Default (no acceleration)
-/// final detector = PoseDetector();
+/// final detector = HandDetector();
 ///
 /// // XNNPACK with auto thread detection (recommended)
-/// final detector = PoseDetector(
+/// final detector = HandDetector(
 ///   performanceConfig: PerformanceConfig.xnnpack(),
 /// );
 ///
 /// // XNNPACK with custom threads
-/// final detector = PoseDetector(
+/// final detector = HandDetector(
 ///   performanceConfig: PerformanceConfig.xnnpack(numThreads: 2),
 /// );
 /// ```
@@ -130,28 +121,32 @@ class PerformanceConfig {
   }
 }
 
-/// Collection of pose landmarks with confidence score (internal use).
-class PoseLandmarks {
-  /// List of 33 body landmarks extracted from the BlazePose model.
-  final List<PoseLandmark> landmarks;
+/// Collection of hand landmarks with confidence score (internal use).
+class HandLandmarks {
+  /// List of 21 landmarks extracted from the hand landmark model.
+  final List<HandLandmark> landmarks;
 
   /// Confidence score for the landmark extraction (0.0 to 1.0).
   final double score;
 
-  /// Creates a collection of pose landmarks with a confidence score.
-  PoseLandmarks({
+  /// Handedness of the detected hand (left or right).
+  final Handedness handedness;
+
+  /// Creates a collection of hand landmarks with a confidence score and handedness.
+  HandLandmarks({
     required this.landmarks,
     required this.score,
+    required this.handedness,
   });
 }
 
-/// A single body keypoint with 3D coordinates and visibility score.
+/// A single keypoint with 3D coordinates and visibility score.
 ///
 /// Coordinates are in the original image space (pixels).
-/// The [z] coordinate represents depth relative to the body center (not absolute depth).
-class PoseLandmark {
-  /// The body part this landmark represents (nose, leftShoulder, etc.)
-  final PoseLandmarkType type;
+/// The [z] coordinate represents depth relative to the center (not absolute depth).
+class HandLandmark {
+  /// The landmark type this represents
+  final HandLandmarkType type;
 
   /// X coordinate in pixels (original image space)
   final double x;
@@ -159,14 +154,14 @@ class PoseLandmark {
   /// Y coordinate in pixels (original image space)
   final double y;
 
-  /// Z coordinate representing depth relative to hips midpoint (not absolute depth)
+  /// Z coordinate representing depth (not absolute depth)
   final double z;
 
   /// Visibility/confidence score (0.0 to 1.0). Higher means more confident the landmark is visible.
   final double visibility;
 
-  /// Creates a pose landmark with 3D coordinates and visibility score.
-  PoseLandmark({
+  /// Creates a hand landmark with 3D coordinates and visibility score.
+  HandLandmark({
     required this.type,
     required this.x,
     required this.y,
@@ -186,130 +181,104 @@ class PoseLandmark {
   }
 }
 
-/// Body part types for the 33 BlazePose landmarks.
+/// Handedness type indicating left or right hand.
+enum Handedness {
+  /// Left hand.
+  left,
+
+  /// Right hand.
+  right,
+}
+
+/// Hand landmark types for the MediaPipe hand landmark model.
 ///
-/// Follows MediaPipe BlazePose topology with landmarks for face, torso, arms, and legs.
+/// Follows MediaPipe hand landmark topology with 21 landmarks for wrist and fingers.
 ///
-/// Available landmarks:
-/// - **Face**: [nose], [leftEyeInner], [leftEye], [leftEyeOuter], [rightEyeInner],
-///   [rightEye], [rightEyeOuter], [leftEar], [rightEar], [mouthLeft], [mouthRight]
-/// - **Torso**: [leftShoulder], [rightShoulder], [leftHip], [rightHip]
-/// - **Arms**: [leftElbow], [rightElbow], [leftWrist], [rightWrist]
-/// - **Hands**: [leftPinky], [rightPinky], [leftIndex], [rightIndex], [leftThumb], [rightThumb]
-/// - **Legs**: [leftKnee], [rightKnee], [leftAnkle], [rightAnkle]
-/// - **Feet**: [leftHeel], [rightHeel], [leftFootIndex], [rightFootIndex]
+/// Available landmarks (21 total):
+/// - **Wrist**: [wrist] (0)
+/// - **Thumb**: [thumbCMC] (1), [thumbMCP] (2), [thumbIP] (3), [thumbTip] (4)
+/// - **Index**: [indexFingerMCP] (5), [indexFingerPIP] (6), [indexFingerDIP] (7), [indexFingerTip] (8)
+/// - **Middle**: [middleFingerMCP] (9), [middleFingerPIP] (10), [middleFingerDIP] (11), [middleFingerTip] (12)
+/// - **Ring**: [ringFingerMCP] (13), [ringFingerPIP] (14), [ringFingerDIP] (15), [ringFingerTip] (16)
+/// - **Pinky**: [pinkyMCP] (17), [pinkyPIP] (18), [pinkyDIP] (19), [pinkyTip] (20)
 ///
 /// Example:
 /// ```dart
-/// final pose = poses.first;
-/// final nose = pose.getLandmark(PoseLandmarkType.nose);
-/// final leftWrist = pose.getLandmark(PoseLandmarkType.leftWrist);
-/// final rightAnkle = pose.getLandmark(PoseLandmarkType.rightAnkle);
+/// final hand = hands.first;
+/// final wrist = hand.getLandmark(HandLandmarkType.wrist);
+/// final indexTip = hand.getLandmark(HandLandmarkType.indexFingerTip);
 ///
-/// if (nose != null) {
-///   print('Nose at (${nose.x}, ${nose.y}) with visibility ${nose.visibility}');
+/// if (wrist != null) {
+///   print('Wrist at (${wrist.x}, ${wrist.y}) with visibility ${wrist.visibility}');
 /// }
 /// ```
-enum PoseLandmarkType {
-  /// Nose tip landmark.
-  nose,
+enum HandLandmarkType {
+  /// Wrist landmark (index 0).
+  wrist,
 
-  /// Left eye inner corner landmark.
-  leftEyeInner,
+  /// Thumb carpometacarpal joint landmark (index 1).
+  thumbCMC,
 
-  /// Left eye center landmark.
-  leftEye,
+  /// Thumb metacarpophalangeal joint landmark (index 2).
+  thumbMCP,
 
-  /// Left eye outer corner landmark.
-  leftEyeOuter,
+  /// Thumb interphalangeal joint landmark (index 3).
+  thumbIP,
 
-  /// Right eye inner corner landmark.
-  rightEyeInner,
+  /// Thumb tip landmark (index 4).
+  thumbTip,
 
-  /// Right eye center landmark.
-  rightEye,
+  /// Index finger metacarpophalangeal joint landmark (index 5).
+  indexFingerMCP,
 
-  /// Right eye outer corner landmark.
-  rightEyeOuter,
+  /// Index finger proximal interphalangeal joint landmark (index 6).
+  indexFingerPIP,
 
-  /// Left ear landmark.
-  leftEar,
+  /// Index finger distal interphalangeal joint landmark (index 7).
+  indexFingerDIP,
 
-  /// Right ear landmark.
-  rightEar,
+  /// Index finger tip landmark (index 8).
+  indexFingerTip,
 
-  /// Left mouth corner landmark.
-  mouthLeft,
+  /// Middle finger metacarpophalangeal joint landmark (index 9).
+  middleFingerMCP,
 
-  /// Right mouth corner landmark.
-  mouthRight,
+  /// Middle finger proximal interphalangeal joint landmark (index 10).
+  middleFingerPIP,
 
-  /// Left shoulder landmark.
-  leftShoulder,
+  /// Middle finger distal interphalangeal joint landmark (index 11).
+  middleFingerDIP,
 
-  /// Right shoulder landmark.
-  rightShoulder,
+  /// Middle finger tip landmark (index 12).
+  middleFingerTip,
 
-  /// Left elbow landmark.
-  leftElbow,
+  /// Ring finger metacarpophalangeal joint landmark (index 13).
+  ringFingerMCP,
 
-  /// Right elbow landmark.
-  rightElbow,
+  /// Ring finger proximal interphalangeal joint landmark (index 14).
+  ringFingerPIP,
 
-  /// Left wrist landmark.
-  leftWrist,
+  /// Ring finger distal interphalangeal joint landmark (index 15).
+  ringFingerDIP,
 
-  /// Right wrist landmark.
-  rightWrist,
+  /// Ring finger tip landmark (index 16).
+  ringFingerTip,
 
-  /// Left pinky finger base landmark.
-  leftPinky,
+  /// Pinky metacarpophalangeal joint landmark (index 17).
+  pinkyMCP,
 
-  /// Right pinky finger base landmark.
-  rightPinky,
+  /// Pinky proximal interphalangeal joint landmark (index 18).
+  pinkyPIP,
 
-  /// Left index finger base landmark.
-  leftIndex,
+  /// Pinky distal interphalangeal joint landmark (index 19).
+  pinkyDIP,
 
-  /// Right index finger base landmark.
-  rightIndex,
-
-  /// Left thumb base landmark.
-  leftThumb,
-
-  /// Right thumb base landmark.
-  rightThumb,
-
-  /// Left hip landmark.
-  leftHip,
-
-  /// Right hip landmark.
-  rightHip,
-
-  /// Left knee landmark.
-  leftKnee,
-
-  /// Right knee landmark.
-  rightKnee,
-
-  /// Left ankle landmark.
-  leftAnkle,
-
-  /// Right ankle landmark.
-  rightAnkle,
-
-  /// Left heel landmark.
-  leftHeel,
-
-  /// Right heel landmark.
-  rightHeel,
-
-  /// Left foot index toe landmark.
-  leftFootIndex,
-
-  /// Right foot index toe landmark.
-  rightFootIndex,
+  /// Pinky tip landmark (index 20).
+  pinkyTip,
 }
+
+/// Number of hand landmarks (21 for MediaPipe hand model).
+const int numHandLandmarks = 21;
 
 /// 2D integer pixel coordinate.
 class Point {
@@ -350,16 +319,17 @@ class BoundingBox {
   });
 }
 
-/// Defines the standard skeleton connections between BlazePose landmarks.
+/// Defines the standard skeleton connections between hand landmarks.
 ///
-/// Each connection is a pair of [PoseLandmarkType] values representing
-/// the start and end points of a line segment in the body skeleton.
+/// Follows MediaPipe hand topology with 21 connections forming the hand skeleton.
+/// Each connection is a pair of [HandLandmarkType] values representing
+/// the start and end points of a line segment in the hand skeleton.
 ///
-/// Use this constant to draw skeleton overlays on detected poses:
+/// Use this constant to draw skeleton overlays on detected hands:
 /// ```dart
-/// for (final connection in poseLandmarkConnections) {
-///   final start = pose.getLandmark(connection[0]);
-///   final end = pose.getLandmark(connection[1]);
+/// for (final connection in handLandmarkConnections) {
+///   final start = hand.getLandmark(connection[0]);
+///   final end = hand.getLandmark(connection[1]);
 ///   if (start != null && end != null && start.visibility > 0.5 && end.visibility > 0.5) {
 ///     // Draw line from start to end
 ///     canvas.drawLine(
@@ -370,72 +340,68 @@ class BoundingBox {
 ///   }
 /// }
 /// ```
-const List<List<PoseLandmarkType>> poseLandmarkConnections = [
-  // Face
-  [PoseLandmarkType.leftEye, PoseLandmarkType.nose],
-  [PoseLandmarkType.rightEye, PoseLandmarkType.nose],
-  [PoseLandmarkType.leftEye, PoseLandmarkType.leftEar],
-  [PoseLandmarkType.rightEye, PoseLandmarkType.rightEar],
-  [PoseLandmarkType.mouthLeft, PoseLandmarkType.mouthRight],
-  // Torso
-  [PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder],
-  [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip],
-  [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip],
-  [PoseLandmarkType.leftHip, PoseLandmarkType.rightHip],
-  // Left arm
-  [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow],
-  [PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist],
-  [PoseLandmarkType.leftWrist, PoseLandmarkType.leftPinky],
-  [PoseLandmarkType.leftWrist, PoseLandmarkType.leftIndex],
-  [PoseLandmarkType.leftWrist, PoseLandmarkType.leftThumb],
-  // Right arm
-  [PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow],
-  [PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist],
-  [PoseLandmarkType.rightWrist, PoseLandmarkType.rightPinky],
-  [PoseLandmarkType.rightWrist, PoseLandmarkType.rightIndex],
-  [PoseLandmarkType.rightWrist, PoseLandmarkType.rightThumb],
-  // Left leg
-  [PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee],
-  [PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle],
-  [PoseLandmarkType.leftAnkle, PoseLandmarkType.leftHeel],
-  [PoseLandmarkType.leftAnkle, PoseLandmarkType.leftFootIndex],
-  // Right leg
-  [PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee],
-  [PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle],
-  [PoseLandmarkType.rightAnkle, PoseLandmarkType.rightHeel],
-  [PoseLandmarkType.rightAnkle, PoseLandmarkType.rightFootIndex],
+const List<List<HandLandmarkType>> handLandmarkConnections = [
+  // Thumb: wrist → CMC → MCP → IP → tip
+  [HandLandmarkType.wrist, HandLandmarkType.thumbCMC],
+  [HandLandmarkType.thumbCMC, HandLandmarkType.thumbMCP],
+  [HandLandmarkType.thumbMCP, HandLandmarkType.thumbIP],
+  [HandLandmarkType.thumbIP, HandLandmarkType.thumbTip],
+  // Index finger: wrist → MCP → PIP → DIP → tip
+  [HandLandmarkType.wrist, HandLandmarkType.indexFingerMCP],
+  [HandLandmarkType.indexFingerMCP, HandLandmarkType.indexFingerPIP],
+  [HandLandmarkType.indexFingerPIP, HandLandmarkType.indexFingerDIP],
+  [HandLandmarkType.indexFingerDIP, HandLandmarkType.indexFingerTip],
+  // Middle finger: MCP → PIP → DIP → tip (connects from index MCP)
+  [HandLandmarkType.indexFingerMCP, HandLandmarkType.middleFingerMCP],
+  [HandLandmarkType.middleFingerMCP, HandLandmarkType.middleFingerPIP],
+  [HandLandmarkType.middleFingerPIP, HandLandmarkType.middleFingerDIP],
+  [HandLandmarkType.middleFingerDIP, HandLandmarkType.middleFingerTip],
+  // Ring finger: MCP → PIP → DIP → tip (connects from middle MCP)
+  [HandLandmarkType.middleFingerMCP, HandLandmarkType.ringFingerMCP],
+  [HandLandmarkType.ringFingerMCP, HandLandmarkType.ringFingerPIP],
+  [HandLandmarkType.ringFingerPIP, HandLandmarkType.ringFingerDIP],
+  [HandLandmarkType.ringFingerDIP, HandLandmarkType.ringFingerTip],
+  // Pinky finger: MCP → PIP → DIP → tip (connects from ring MCP)
+  [HandLandmarkType.ringFingerMCP, HandLandmarkType.pinkyMCP],
+  [HandLandmarkType.pinkyMCP, HandLandmarkType.pinkyPIP],
+  [HandLandmarkType.pinkyPIP, HandLandmarkType.pinkyDIP],
+  [HandLandmarkType.pinkyDIP, HandLandmarkType.pinkyTip],
+  // Wrist to pinky base (palm edge)
+  [HandLandmarkType.wrist, HandLandmarkType.pinkyMCP],
 ];
 
-/// Detected person with bounding box and optional body landmarks.
+/// Detected hand with bounding box and optional landmarks.
 ///
-/// This is the main result returned by [PoseDetector.detect()].
+/// This is the main result returned by [HandDetector.detect()].
 ///
 /// Contains:
-/// - [boundingBox]: Location of the detected person in the image
-/// - [score]: Confidence score from the person detector (0.0 to 1.0)
-/// - [landmarks]: List of 33 body keypoints (empty if [PoseMode.boxes])
+/// - [boundingBox]: Location of the detected hand in the image
+/// - [score]: Confidence score from the hand detector (0.0 to 1.0)
+/// - [landmarks]: List of 21 keypoints (empty if [HandMode.boxes])
+/// - [handedness]: Whether this is a left or right hand (null if not determined)
 /// - [imageWidth] and [imageHeight]: Original image dimensions for coordinate reference
 ///
 /// Example:
 /// ```dart
-/// final poses = await detector.detect(imageBytes);
-/// for (final pose in poses) {
-///   print('Person detected with confidence ${pose.score}');
-///   if (pose.hasLandmarks) {
-///     final nose = pose.getLandmark(PoseLandmarkType.nose);
-///     print('Nose at (${nose?.x}, ${nose?.y})');
+/// final hands = await detector.detect(imageBytes);
+/// for (final hand in hands) {
+///   print('Hand detected with confidence ${hand.score}');
+///   print('Handedness: ${hand.handedness}');
+///   if (hand.hasLandmarks) {
+///     final wrist = hand.getLandmark(HandLandmarkType.wrist);
+///     print('Wrist at (${wrist?.x}, ${wrist?.y})');
 ///   }
 /// }
 /// ```
-class Pose {
-  /// Bounding box of the detected person in pixel coordinates
+class Hand {
+  /// Bounding box of the detected hand in pixel coordinates
   final BoundingBox boundingBox;
 
-  /// Confidence score from person detector (0.0 to 1.0)
+  /// Confidence score from hand detector (0.0 to 1.0)
   final double score;
 
-  /// List of 33 body landmarks. Empty if using [PoseMode.boxes].
-  final List<PoseLandmark> landmarks;
+  /// List of 21 landmarks. Empty if using [HandMode.boxes].
+  final List<HandLandmark> landmarks;
 
   /// Width of the original image in pixels
   final int imageWidth;
@@ -443,17 +409,43 @@ class Pose {
   /// Height of the original image in pixels
   final int imageHeight;
 
-  /// Creates a detected pose with bounding box, landmarks, and image dimensions.
-  const Pose({
+  /// Handedness of the detected hand (left or right).
+  /// May be null if handedness detection is not available.
+  final Handedness? handedness;
+
+  /// Rotation angle in radians from palm detection.
+  /// Used to draw the rotated bounding box that matches the hand orientation.
+  /// May be null if rotation data is not preserved.
+  final double? rotation;
+
+  /// Center X coordinate of the rotated rectangle in pixels.
+  /// May be null if rotation data is not preserved.
+  final double? rotatedCenterX;
+
+  /// Center Y coordinate of the rotated rectangle in pixels.
+  /// May be null if rotation data is not preserved.
+  final double? rotatedCenterY;
+
+  /// Size of the rotated rectangle in pixels.
+  /// May be null if rotation data is not preserved.
+  final double? rotatedSize;
+
+  /// Creates a detected hand with bounding box, landmarks, and image dimensions.
+  const Hand({
     required this.boundingBox,
     required this.score,
     required this.landmarks,
     required this.imageWidth,
     required this.imageHeight,
+    this.handedness,
+    this.rotation,
+    this.rotatedCenterX,
+    this.rotatedCenterY,
+    this.rotatedSize,
   });
 
   /// Gets a specific landmark by type, or null if not found
-  PoseLandmark? getLandmark(PoseLandmarkType type) {
+  HandLandmark? getLandmark(HandLandmarkType type) {
     try {
       return landmarks.firstWhere((l) => l.type == type);
     } catch (_) {
@@ -461,7 +453,7 @@ class Pose {
     }
   }
 
-  /// Returns true if this pose has landmarks
+  /// Returns true if this hand has landmarks
   bool get hasLandmarks => landmarks.isNotEmpty;
 
   @override
@@ -470,7 +462,7 @@ class Pose {
         .map((l) =>
             '${l.type.name}: (${l.x.toStringAsFixed(2)}, ${l.y.toStringAsFixed(2)}) vis=${l.visibility.toStringAsFixed(2)}')
         .join('\n');
-    return 'Pose(\n'
+    return 'Hand(\n'
         '  score=${score.toStringAsFixed(3)},\n'
         '  landmarks=${landmarks.length},\n'
         '  coords:\n$landmarksInfo\n)';

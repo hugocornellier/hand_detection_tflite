@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.10)
 
-set(PROJECT_NAME "pose_detection_tflite")
+set(PROJECT_NAME "hand_detection_tflite")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
-set(PLUGIN_NAME "pose_detection_tflite_plugin")
+set(PLUGIN_NAME "hand_detection_tflite_plugin")
 
 list(APPEND PLUGIN_SOURCES
-  "pose_detection_tflite_plugin.cc"
+  "hand_detection_tflite_plugin.cc"
 )
 
 add_library(${PLUGIN_NAME} SHARED
@@ -46,7 +46,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "Disable installation of googletest" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(${TEST_RUNNER}
-  test/pose_detection_tflite_plugin_test.cc
+  test/hand_detection_tflite_plugin_test.cc
   ${PLUGIN_SOURCES}
 )
 apply_standard_settings(${TEST_RUNNER})

@@ -1,6 +1,6 @@
 # Testing Guide
 
-This directory contains tests for the `pose_detection_tflite` package.
+This directory contains tests for the `hand_detection_tflite` package.
 
 ## Test Structure
 

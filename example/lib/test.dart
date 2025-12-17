@@ -1,28 +1,28 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:pose_detection_tflite/pose_detection_tflite.dart';
+import 'package:hand_detection_tflite/hand_detection_tflite.dart';
 
 Future main() async {
   // 1. initialize
-  final PoseDetector detector = PoseDetector(
-    mode: PoseMode.boxesAndLandmarks,
-    landmarkModel: PoseLandmarkModel.heavy,
+  final HandDetector detector = HandDetector(
+    mode: HandMode.boxesAndLandmarks,
+    landmarkModel: HandLandmarkModel.full,
   );
   await detector.initialize();
 
   // 2. detect
   final Uint8List imageBytes = await File('path/to/image.jpg').readAsBytes();
-  final List<Pose> results = await detector.detect(imageBytes);
+  final List<Hand> results = await detector.detect(imageBytes);
 
   // 3. access results
-  for (final Pose pose in results) {
-    final BoundingBox bbox = pose.boundingBox;
+  for (final Hand hand in results) {
+    final BoundingBox bbox = hand.boundingBox;
     stdout.writeln(
         'Bounding box: (${bbox.left}, ${bbox.top}) → (${bbox.right}, ${bbox.bottom})');
 
-    if (pose.hasLandmarks) {
+    if (hand.hasLandmarks) {
       // iterate through landmarks
-      for (final PoseLandmark lm in pose.landmarks) {
+      for (final HandLandmark lm in hand.landmarks) {
         stdout.writeln(
           '${lm.type}: (${lm.x.toStringAsFixed(1)}, ${lm.y.toStringAsFixed(1)}) '
           'vis=${lm.visibility.toStringAsFixed(2)}',
@@ -30,12 +30,11 @@ Future main() async {
       }
 
       // access individual landmarks
-      // see "Pose Landmark Types" section in README for full list of landmarks
-      final PoseLandmark? leftKnee =
-          pose.getLandmark(PoseLandmarkType.leftKnee);
-      if (leftKnee != null) {
+      final HandLandmark? wrist =
+          hand.getLandmark(HandLandmarkType.wrist);
+      if (wrist != null) {
         stdout.writeln(
-            'Left knee visibility: ${leftKnee.visibility.toStringAsFixed(2)}');
+            'Wrist visibility: ${wrist.visibility.toStringAsFixed(2)}');
       }
     }
   }

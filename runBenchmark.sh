@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run benchmark tests for pose_detection_tflite
+# Run benchmark tests for hand_detection_tflite
 # This script runs the performance benchmark integration tests
 
 set -e  # Exit on any error

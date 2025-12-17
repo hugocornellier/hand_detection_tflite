@@ -66,7 +66,7 @@ class TestUtils {
   }
 }
 
-class PoseDetectionMatchers {
+class HandDetectionMatchers {
   /// Matcher for checking if a Point is approximately equal to expected
   static Matcher approximatelyEqualsPoint(math.Point<double> expected,
       {double epsilon = 0.0001}) {

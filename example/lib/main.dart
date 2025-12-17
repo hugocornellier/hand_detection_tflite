@@ -1,25 +1,83 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:math';
+import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:pose_detection_tflite/pose_detection_tflite.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:hand_detection_tflite/hand_detection_tflite.dart';
 import 'package:camera_macos/camera_macos_controller.dart';
 import 'package:camera_macos/camera_macos_view.dart';
 import 'package:camera_macos/camera_macos_arguments.dart';
-import 'package:image/image.dart' as img;
+import 'package:opencv_dart/opencv_dart.dart' as cv;
 
-void main() {
-  runApp(const PoseDetectionApp());
+/// Calculates the 4 corner points of a rotated rectangle.
+///
+/// Matches OpenCV's cv.boxPoints() behavior for drawing rotated bounding boxes.
+/// Parameters:
+/// - [cx], [cy]: Center coordinates of the rectangle
+/// - [width], [height]: Dimensions of the rectangle
+/// - [rotation]: Rotation angle in radians
+///
+/// Returns a list of 4 Offset points representing the corners of the rotated rectangle.
+List<Offset> getRotatedRectPoints(
+  double cx,
+  double cy,
+  double width,
+  double height,
+  double rotation,
+) {
+  final b = cos(rotation) * 0.5;
+  final a = sin(rotation) * 0.5;
+
+  return [
+    Offset(cx - a * height - b * width, cy + b * height - a * width),
+    Offset(cx + a * height - b * width, cy - b * height - a * width),
+    Offset(cx + a * height + b * width, cy - b * height + a * width),
+    Offset(cx - a * height + b * width, cy + b * height + a * width),
+  ];
 }
 
-class PoseDetectionApp extends StatelessWidget {
-  const PoseDetectionApp({super.key});
+/// FPS calculator class ported from Python's CvFpsCalc
+class FpsCalculator {
+  final int bufferLen;
+  final Queue<double> _diffTimes;
+  DateTime _startTime;
+
+  FpsCalculator({this.bufferLen = 10})
+      : _diffTimes = Queue<double>(),
+        _startTime = DateTime.now();
+
+  double get() {
+    final currentTime = DateTime.now();
+    final differentTime = currentTime.difference(_startTime).inMicroseconds / 1000.0; // milliseconds
+    _startTime = currentTime;
+
+    _diffTimes.add(differentTime);
+    if (_diffTimes.length > bufferLen) {
+      _diffTimes.removeFirst();
+    }
+
+    if (_diffTimes.isEmpty) return 0.0;
+
+    final avgDiffTime = _diffTimes.reduce((a, b) => a + b) / _diffTimes.length;
+    final fps = 1000.0 / avgDiffTime;
+    return double.parse(fps.toStringAsFixed(2));
+  }
+}
+
+void main() {
+  runApp(const HandDetectionApp());
+}
+
+class HandDetectionApp extends StatelessWidget {
+  const HandDetectionApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pose Detection Demo',
+      title: 'Hand Detection Demo',
       theme: ThemeData(
         colorSchemeSeed: Colors.blue,
         useMaterial3: true,
@@ -36,13 +94,13 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pose Detection Demo'),
+        title: const Text('Hand Detection Demo'),
       ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.accessibility_new, size: 100, color: Colors.blue[300]),
+            Icon(Icons.pan_tool, size: 100, color: Colors.blue[300]),
             const SizedBox(height: 48),
             Text(
               'Choose Detection Mode',
@@ -53,7 +111,7 @@ class HomeScreen extends StatelessWidget {
               context,
               icon: Icons.image,
               title: 'Still Image',
-              description: 'Detect poses in photos from gallery or camera',
+              description: 'Detect hands in photos from gallery or camera',
               onTap: () {
                 Navigator.push(
                   context,
@@ -68,7 +126,7 @@ class HomeScreen extends StatelessWidget {
               context,
               icon: Icons.videocam,
               title: 'Live Camera',
-              description: 'Real-time pose detection from camera feed',
+              description: 'Real-time hand detection from camera feed',
               onTap: () {
                 Navigator.push(
                   context,
@@ -140,21 +198,20 @@ class StillImageScreen extends StatefulWidget {
 }
 
 class _StillImageScreenState extends State<StillImageScreen> {
-  final PoseDetector _poseDetector = PoseDetector(
-    mode: PoseMode.boxesAndLandmarks,
-    landmarkModel: PoseLandmarkModel.heavy,
+  final HandDetector _handDetector = HandDetector(
+    mode: HandMode.boxesAndLandmarks,
+    landmarkModel: HandLandmarkModel.full,
     detectorConf: 0.6,
-    detectorIou: 0.4,
     maxDetections: 10,
     minLandmarkScore: 0.5,
-    performanceConfig: const PerformanceConfig.xnnpack(), // Enable XNNPACK for 2-5x speedup
+    performanceConfig: PerformanceConfig.disabled, // Disabled XNNPACK to fix initialization error
   );
   final ImagePicker _picker = ImagePicker();
 
   bool _isInitialized = false;
   bool _isProcessing = false;
   File? _imageFile;
-  List<Pose> _results = [];
+  List<Hand> _results = [];
   String? _errorMessage;
 
   @override
@@ -170,7 +227,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
     });
 
     try {
-      await _poseDetector.initialize();
+      await _handDetector.initialize();
       setState(() {
         _isInitialized = true;
         _isProcessing = false;
@@ -196,12 +253,45 @@ class _StillImageScreenState extends State<StillImageScreen> {
       });
 
       final Uint8List bytes = await _imageFile!.readAsBytes();
-      final List<Pose> results = await _poseDetector.detect(bytes);
+      final List<Hand> results = await _handDetector.detect(bytes);
 
       setState(() {
         _results = results;
         _isProcessing = false;
-        if (results.isEmpty) _errorMessage = 'No people detected in image';
+        if (results.isEmpty) _errorMessage = 'No hands detected in image';
+      });
+    } catch (e) {
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = 'Error: $e';
+      });
+    }
+  }
+
+  Future<void> _pickFileFromSystem() async {
+    try {
+      const XTypeGroup typeGroup = XTypeGroup(
+        label: 'images',
+        extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'],
+      );
+      final XFile? file = await openFile(acceptedTypeGroups: [typeGroup]);
+
+      if (file == null) return;
+
+      setState(() {
+        _imageFile = File(file.path);
+        _results = [];
+        _isProcessing = true;
+        _errorMessage = null;
+      });
+
+      final Uint8List bytes = await _imageFile!.readAsBytes();
+      final List<Hand> results = await _handDetector.detect(bytes);
+
+      setState(() {
+        _results = results;
+        _isProcessing = false;
+        if (results.isEmpty) _errorMessage = 'No hands detected in image';
       });
     } catch (e) {
       setState(() {
@@ -220,6 +310,14 @@ class _StillImageScreenState extends State<StillImageScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text('Browse Files'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickFileFromSystem();
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.photo_library),
                 title: const Text('Gallery'),
@@ -245,7 +343,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
 
   @override
   void dispose() {
-    _poseDetector.dispose();
+    _handDetector.dispose();
     super.dispose();
   }
 
@@ -253,12 +351,12 @@ class _StillImageScreenState extends State<StillImageScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pose Detection Demo'),
+        title: const Text('Hand Detection Demo'),
         actions: [
           if (_isInitialized && _imageFile != null)
             IconButton(
               icon: const Icon(Icons.info_outline),
-              onPressed: _showPoseInfo,
+              onPressed: _showHandInfo,
             ),
         ],
       ),
@@ -281,7 +379,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Initializing pose detector...'),
+            Text('Initializing hand detector...'),
           ],
         ),
       );
@@ -314,9 +412,9 @@ class _StillImageScreenState extends State<StillImageScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_outline, size: 100, color: Colors.grey[400]),
+            Icon(Icons.pan_tool_outlined, size: 100, color: Colors.grey[400]),
             const SizedBox(height: 24),
-            Text('Select an image to detect pose',
+            Text('Select an image to detect hands',
                 style: TextStyle(fontSize: 18, color: Colors.grey[600])),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -332,7 +430,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
     return SingleChildScrollView(
       child: Column(
         children: [
-          PoseVisualizerWidget(
+          HandVisualizerWidget(
             imageFile: _imageFile!,
             results: _results,
           ),
@@ -343,7 +441,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 8),
-                  Text('Detecting pose...'),
+                  Text('Detecting hands...'),
                 ],
               ),
             ),
@@ -373,7 +471,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Detections: ${_results.length} ✓',
+                      Text('Detections: ${_results.length}',
                           style: Theme.of(context)
                               .textTheme
                               .titleLarge
@@ -390,9 +488,9 @@ class _StillImageScreenState extends State<StillImageScreen> {
     );
   }
 
-  void _showPoseInfo() {
+  void _showHandInfo() {
     if (_results.isEmpty) return;
-    final Pose first = _results.first;
+    final Hand first = _results.first;
 
     showModalBottomSheet(
       context: context,
@@ -405,7 +503,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
           controller: scrollController,
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Landmark Details (first pose)',
+            Text('Landmark Details (first hand)',
                 style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 16),
             ..._buildLandmarkListFor(first),
@@ -415,8 +513,8 @@ class _StillImageScreenState extends State<StillImageScreen> {
     );
   }
 
-  List<Widget> _buildLandmarkListFor(Pose result) {
-    final List<PoseLandmark> lm = result.landmarks;
+  List<Widget> _buildLandmarkListFor(Hand result) {
+    final List<HandLandmark> lm = result.landmarks;
     return lm.map((landmark) {
       final Point pixel =
           landmark.toPixel(result.imageWidth, result.imageHeight);
@@ -440,7 +538,7 @@ class _StillImageScreenState extends State<StillImageScreen> {
     }).toList();
   }
 
-  String _landmarkName(PoseLandmarkType type) {
+  String _landmarkName(HandLandmarkType type) {
     return type
         .toString()
         .split('.')
@@ -453,11 +551,11 @@ class _StillImageScreenState extends State<StillImageScreen> {
   }
 }
 
-class PoseVisualizerWidget extends StatelessWidget {
+class HandVisualizerWidget extends StatelessWidget {
   final File imageFile;
-  final List<Pose> results;
+  final List<Hand> results;
 
-  const PoseVisualizerWidget(
+  const HandVisualizerWidget(
       {super.key, required this.imageFile, required this.results});
 
   @override
@@ -476,7 +574,7 @@ class PoseVisualizerWidget extends StatelessWidget {
 }
 
 class MultiOverlayPainter extends CustomPainter {
-  final List<Pose> results;
+  final List<Hand> results;
 
   MultiOverlayPainter({required this.results});
 
@@ -511,7 +609,7 @@ class MultiOverlayPainter extends CustomPainter {
     }
   }
 
-  void _drawConnections(Canvas canvas, Pose result, double scaleX,
+  void _drawConnections(Canvas canvas, Hand result, double scaleX,
       double scaleY, double offsetX, double offsetY) {
     final Paint paint = Paint()
       ..color = Colors.green.withValues(alpha: 0.8)
@@ -519,9 +617,9 @@ class MultiOverlayPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     // Use the predefined skeleton connections from the package
-    for (final List<PoseLandmarkType> c in poseLandmarkConnections) {
-      final PoseLandmark? start = result.getLandmark(c[0]);
-      final PoseLandmark? end = result.getLandmark(c[1]);
+    for (final List<HandLandmarkType> c in handLandmarkConnections) {
+      final HandLandmark? start = result.getLandmark(c[0]);
+      final HandLandmark? end = result.getLandmark(c[1]);
       if (start != null &&
           end != null &&
           start.visibility > 0.5 &&
@@ -535,9 +633,9 @@ class MultiOverlayPainter extends CustomPainter {
     }
   }
 
-  void _drawLandmarks(Canvas canvas, Pose result, double scaleX, double scaleY,
+  void _drawLandmarks(Canvas canvas, Hand result, double scaleX, double scaleY,
       double offsetX, double offsetY) {
-    for (final PoseLandmark l in result.landmarks) {
+    for (final HandLandmark l in result.landmarks) {
       if (l.visibility > 0.5) {
         final Offset center =
             Offset(l.x * scaleX + offsetX, l.y * scaleY + offsetY);
@@ -551,8 +649,31 @@ class MultiOverlayPainter extends CustomPainter {
     }
   }
 
-  void _drawBbox(Canvas canvas, Pose r, double scaleX, double scaleY,
+  void _drawBbox(Canvas canvas, Hand r, double scaleX, double scaleY,
       double offsetX, double offsetY) {
+    // Draw rotated rectangle (red) if rotation data exists
+    if (r.rotation != null &&
+        r.rotatedCenterX != null &&
+        r.rotatedCenterY != null &&
+        r.rotatedSize != null) {
+      final Paint rotatedPaint = Paint()
+        ..color = Colors.red.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+
+      final points = getRotatedRectPoints(
+        r.rotatedCenterX! * scaleX + offsetX,
+        r.rotatedCenterY! * scaleY + offsetY,
+        r.rotatedSize! * scaleX,
+        r.rotatedSize! * scaleY,
+        r.rotation!,
+      );
+
+      final path = Path()..addPolygon(points, true);
+      canvas.drawPath(path, rotatedPaint);
+    }
+
+    // Draw regular axis-aligned bbox (orange)
     final Paint boxPaint = Paint()
       ..color = Colors.orangeAccent.withValues(alpha: 0.9)
       ..style = PaintingStyle.stroke
@@ -584,41 +705,43 @@ class CameraScreen extends StatefulWidget {
 
 class _CameraScreenState extends State<CameraScreen> {
   CameraMacOSController? _cameraController;
-  final PoseDetector _poseDetector = PoseDetector(
-    mode: PoseMode.boxes,
-    landmarkModel:
-        PoseLandmarkModel.lite, // Use lite for better real-time performance
-    detectorConf: 0.7,
-    detectorIou: 0.4,
-    maxDetections: 5,
+  final HandDetector _handDetector = HandDetector(
+    mode: HandMode.boxesAndLandmarks,
+    landmarkModel: HandLandmarkModel.full,
+    detectorConf: 0.6,
+    maxDetections: 10,
     minLandmarkScore: 0.5,
-    performanceConfig: const PerformanceConfig.xnnpack(), // Enable XNNPACK for real-time performance
+    performanceConfig: const PerformanceConfig.xnnpack(),
   );
 
   bool _isInitialized = false;
   bool _isProcessing = false;
-  List<Pose> _currentPoses = [];
+  List<Hand> _currentHands = [];
   String? _errorMessage;
   int _frameCount = 0;
-  static const int _frameSkip = 10; // Process every 5th frame for performance
+  static const int _frameSkip = 1; // Process every frame (matches Python default)
   Size? _cameraSize;
+
+  // FPS calculation
+  final FpsCalculator _fpsCalculator = FpsCalculator(bufferLen: 10);
+  double _currentFps = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _initializePoseDetector();
+    _initializeHandDetector();
   }
 
-  Future<void> _initializePoseDetector() async {
+  Future<void> _initializeHandDetector() async {
     try {
-      // Initialize pose detector
-      await _poseDetector.initialize();
+      // Initialize hand detector
+      await _handDetector.initialize();
       setState(() {
         _isInitialized = true;
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to initialize pose detector: $e';
+        _errorMessage = 'Failed to initialize hand detector: $e';
       });
     }
   }
@@ -637,6 +760,9 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _processCameraImage(CameraImageData imageData) async {
+    // Calculate FPS
+    final fps = _fpsCalculator.get();
+
     // Skip frames for performance
     _frameCount++;
     if (_frameCount % _frameSkip != 0) {
@@ -651,8 +777,25 @@ class _CameraScreenState extends State<CameraScreen> {
     _isProcessing = true;
 
     try {
-      // Convert ARGB8888 to PNG bytes
-      final Uint8List pngBytes = _convertARGBtoPNG(imageData);
+      // Convert ARGB (macOS camera format) to BGR cv.Mat
+      // macOS camera outputs ARGB, OpenCV expects BGR
+      final mat = cv.Mat.zeros(imageData.height, imageData.width, cv.MatType.CV_8UC3);
+      final bytes = imageData.bytes;
+      final stride = imageData.bytesPerRow;
+      final matData = mat.data;
+
+      int dstIdx = 0;
+      for (int y = 0; y < imageData.height; y++) {
+        final rowStart = y * stride;
+        for (int x = 0; x < imageData.width; x++) {
+          final srcIdx = rowStart + x * 4;
+          // Input: ARGB (macOS camera format)
+          // Output: BGR (OpenCV format)
+          matData[dstIdx++] = bytes[srcIdx + 3]; // B
+          matData[dstIdx++] = bytes[srcIdx + 2]; // G
+          matData[dstIdx++] = bytes[srcIdx + 1]; // R
+        }
+      }
 
       // Store camera size from image data
       if (_cameraSize == null) {
@@ -662,40 +805,43 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       }
 
-      // Run pose detection
-      final List<Pose> poses = await _poseDetector.detect(pngBytes);
+      // Match Python's 640x480 resolution (no aggressive downscaling)
+      cv.Mat processedMat = mat;
+      const int maxDim = 640;
+      if (mat.cols > maxDim || mat.rows > maxDim) {
+        final double scale = maxDim / (mat.cols > mat.rows ? mat.cols : mat.rows);
+        processedMat = cv.resize(
+          mat,
+          ((mat.cols * scale).toInt(), (mat.rows * scale).toInt()),
+          interpolation: cv.INTER_LINEAR,
+        );
+        mat.dispose();
+      }
+
+      // Run hand detection directly on cv.Mat
+      final List<Hand> hands = await _handDetector.detectOnMat(processedMat);
+
+      // Clean up
+      processedMat.dispose();
 
       // Update UI with results
       if (mounted) {
         setState(() {
-          _currentPoses = poses;
+          _currentHands = hands;
+          _currentFps = fps;
         });
       }
-    } catch (e) {
-      // Silently ignore errors to avoid spamming the UI
-      // print('Detection error: $e');
+    } catch (_) {
+      // Silently ignore errors
     } finally {
       _isProcessing = false;
     }
   }
 
-  Uint8List _convertARGBtoPNG(CameraImageData imageData) {
-    // Create image from ARGB8888 data
-    final img.Image image = img.Image.fromBytes(
-      width: imageData.width,
-      height: imageData.height,
-      bytes: imageData.bytes.buffer,
-      order: img.ChannelOrder.argb,
-    );
-
-    // Encode to PNG
-    return Uint8List.fromList(img.encodePng(image));
-  }
-
   @override
   void dispose() {
     _cameraController?.destroy();
-    _poseDetector.dispose();
+    _handDetector.dispose();
     super.dispose();
   }
 
@@ -703,14 +849,14 @@ class _CameraScreenState extends State<CameraScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Pose Detection'),
+        title: const Text('Live Hand Detection'),
         actions: [
           if (_isInitialized && _cameraController != null)
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Center(
                 child: Text(
-                  '${_currentPoses.length} pose(s)',
+                  '${_currentHands.length} hand(s)',
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
@@ -740,7 +886,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 setState(() {
                   _errorMessage = null;
                 });
-                _initializePoseDetector();
+                _initializeHandDetector();
               },
               child: const Text('Retry'),
             ),
@@ -756,7 +902,7 @@ class _CameraScreenState extends State<CameraScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Initializing pose detector...'),
+            Text('Initializing hand detector...'),
           ],
         ),
       );
@@ -772,32 +918,43 @@ class _CameraScreenState extends State<CameraScreen> {
           enableAudio: false,
         ),
 
-        // Pose overlay
-        if (_currentPoses.isNotEmpty && _cameraSize != null)
+        // Hand overlay
+        if (_currentHands.isNotEmpty && _cameraSize != null)
           CustomPaint(
-            painter: CameraPoseOverlayPainter(
-              poses: _currentPoses,
+            painter: CameraHandOverlayPainter(
+              hands: _currentHands,
               cameraSize: _cameraSize!,
             ),
           ),
 
-        // Status indicator
+        // FPS display (Python style: black outline + white text at top-left)
         Positioned(
-          bottom: 16,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(20),
+          top: 10,
+          left: 10,
+          child: Stack(
+            children: [
+              // Black outline
+              Text(
+                'FPS:${_currentFps.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  foreground: Paint()
+                    ..style = PaintingStyle.stroke
+                    ..strokeWidth = 4
+                    ..color = Colors.black,
+                ),
               ),
-              child: Text(
-                _isProcessing ? 'Processing...' : 'Ready',
-                style: const TextStyle(color: Colors.white),
+              // White text
+              Text(
+                'FPS:${_currentFps.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ],
@@ -805,22 +962,22 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 }
 
-class CameraPoseOverlayPainter extends CustomPainter {
-  final List<Pose> poses;
+class CameraHandOverlayPainter extends CustomPainter {
+  final List<Hand> hands;
   final Size cameraSize;
 
-  CameraPoseOverlayPainter({
-    required this.poses,
+  CameraHandOverlayPainter({
+    required this.hands,
     required this.cameraSize,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (poses.isEmpty) return;
+    if (hands.isEmpty) return;
 
-    // Get image dimensions from first pose
-    final int imageWidth = poses.first.imageWidth;
-    final int imageHeight = poses.first.imageHeight;
+    // Get image dimensions from first hand
+    final int imageWidth = hands.first.imageWidth;
+    final int imageHeight = hands.first.imageHeight;
 
     // Calculate scaling to map from image coordinates to preview coordinates
     final double imageAspect = imageWidth / imageHeight;
@@ -839,16 +996,16 @@ class CameraPoseOverlayPainter extends CustomPainter {
       offsetY = (size.height - imageHeight * scaleY) / 2;
     }
 
-    for (final pose in poses) {
-      _drawBbox(canvas, pose, scaleX, scaleY, offsetX, offsetY);
-      if (pose.hasLandmarks) {
-        _drawConnections(canvas, pose, scaleX, scaleY, offsetX, offsetY);
-        _drawLandmarks(canvas, pose, scaleX, scaleY, offsetX, offsetY);
+    for (final hand in hands) {
+      _drawBbox(canvas, hand, scaleX, scaleY, offsetX, offsetY);
+      if (hand.hasLandmarks) {
+        _drawConnections(canvas, hand, scaleX, scaleY, offsetX, offsetY);
+        _drawLandmarks(canvas, hand, scaleX, scaleY, offsetX, offsetY);
       }
     }
   }
 
-  void _drawConnections(Canvas canvas, Pose pose, double scaleX, double scaleY,
+  void _drawConnections(Canvas canvas, Hand hand, double scaleX, double scaleY,
       double offsetX, double offsetY) {
     final Paint paint = Paint()
       ..color = Colors.green.withValues(alpha: 0.8)
@@ -856,9 +1013,9 @@ class CameraPoseOverlayPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     // Use the predefined skeleton connections from the package
-    for (final List<PoseLandmarkType> c in poseLandmarkConnections) {
-      final PoseLandmark? start = pose.getLandmark(c[0]);
-      final PoseLandmark? end = pose.getLandmark(c[1]);
+    for (final List<HandLandmarkType> c in handLandmarkConnections) {
+      final HandLandmark? start = hand.getLandmark(c[0]);
+      final HandLandmark? end = hand.getLandmark(c[1]);
       if (start != null &&
           end != null &&
           start.visibility > 0.5 &&
@@ -872,9 +1029,9 @@ class CameraPoseOverlayPainter extends CustomPainter {
     }
   }
 
-  void _drawLandmarks(Canvas canvas, Pose pose, double scaleX, double scaleY,
+  void _drawLandmarks(Canvas canvas, Hand hand, double scaleX, double scaleY,
       double offsetX, double offsetY) {
-    for (final PoseLandmark l in pose.landmarks) {
+    for (final HandLandmark l in hand.landmarks) {
       if (l.visibility > 0.5) {
         final Offset center =
             Offset(l.x * scaleX + offsetX, l.y * scaleY + offsetY);
@@ -888,8 +1045,31 @@ class CameraPoseOverlayPainter extends CustomPainter {
     }
   }
 
-  void _drawBbox(Canvas canvas, Pose pose, double scaleX, double scaleY,
+  void _drawBbox(Canvas canvas, Hand hand, double scaleX, double scaleY,
       double offsetX, double offsetY) {
+    // Draw rotated rectangle (red) if rotation data exists
+    if (hand.rotation != null &&
+        hand.rotatedCenterX != null &&
+        hand.rotatedCenterY != null &&
+        hand.rotatedSize != null) {
+      final Paint rotatedPaint = Paint()
+        ..color = Colors.red.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+
+      final points = getRotatedRectPoints(
+        hand.rotatedCenterX! * scaleX + offsetX,
+        hand.rotatedCenterY! * scaleY + offsetY,
+        hand.rotatedSize! * scaleX,
+        hand.rotatedSize! * scaleY,
+        hand.rotation!,
+      );
+
+      final path = Path()..addPolygon(points, true);
+      canvas.drawPath(path, rotatedPaint);
+    }
+
+    // Draw regular axis-aligned bbox (orange)
     final Paint boxPaint = Paint()
       ..color = Colors.orangeAccent.withValues(alpha: 0.9)
       ..style = PaintingStyle.stroke
@@ -899,15 +1079,15 @@ class CameraPoseOverlayPainter extends CustomPainter {
       ..color = Colors.orangeAccent.withValues(alpha: 0.08)
       ..style = PaintingStyle.fill;
 
-    final double x1 = pose.boundingBox.left * scaleX + offsetX;
-    final double y1 = pose.boundingBox.top * scaleY + offsetY;
-    final double x2 = pose.boundingBox.right * scaleX + offsetX;
-    final double y2 = pose.boundingBox.bottom * scaleY + offsetY;
+    final double x1 = hand.boundingBox.left * scaleX + offsetX;
+    final double y1 = hand.boundingBox.top * scaleY + offsetY;
+    final double x2 = hand.boundingBox.right * scaleX + offsetX;
+    final double y2 = hand.boundingBox.bottom * scaleY + offsetY;
     final Rect rect = Rect.fromLTRB(x1, y1, x2, y2);
     canvas.drawRect(rect, fillPaint);
     canvas.drawRect(rect, boxPaint);
   }
 
   @override
-  bool shouldRepaint(CameraPoseOverlayPainter oldDelegate) => true;
+  bool shouldRepaint(CameraHandOverlayPainter oldDelegate) => true;
 }

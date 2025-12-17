@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.14)
 
-set(PROJECT_NAME "pose_detection_tflite")
+set(PROJECT_NAME "hand_detection_tflite")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
-set(PLUGIN_NAME "pose_detection_tflite_plugin")
+set(PLUGIN_NAME "hand_detection_tflite_plugin")
 
 add_library(${PLUGIN_NAME} SHARED
-  "pose_detection_tflite_plugin.cpp"
-  "pose_detection_tflite_plugin.h"
-  "pose_detection_tflite_plugin_c_api.cpp"
-  "include/pose_detection_tflite/pose_detection_tflite_plugin_c_api.h"
+  "hand_detection_tflite_plugin.cpp"
+  "hand_detection_tflite_plugin.h"
+  "hand_detection_tflite_plugin_c_api.cpp"
+  "include/hand_detection_tflite/hand_detection_tflite_plugin_c_api.h"
 )
 
 apply_standard_settings(${PLUGIN_NAME})
@@ -21,5 +21,5 @@ target_include_directories(${PLUGIN_NAME}
 )
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
 
-set(POSE_DETECTION_TFLITE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../assets/bin/libtensorflowlite_c-win.dll")
-set(${PROJECT_NAME}_bundled_libraries "${POSE_DETECTION_TFLITE_DLL}" PARENT_SCOPE)
+set(HAND_DETECTION_TFLITE_DLL "${CMAKE_CURRENT_SOURCE_DIR}/../assets/bin/libtensorflowlite_c-win.dll")
+set(${PROJECT_NAME}_bundled_libraries "${HAND_DETECTION_TFLITE_DLL}" PARENT_SCOPE)

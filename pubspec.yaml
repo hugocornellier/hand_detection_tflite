@@ -1,13 +1,13 @@
-name: pose_detection_tflite
-description: Pose & landmark detection using on-device TFLite models.
-version: 1.1.1
+name: hand_detection_tflite
+description: Hand & landmark detection using on-device TFLite models.
+version: 0.0.1
 
-repository: https://github.com/hugocornellier/pose_detection_tflite
-homepage: https://github.com/hugocornellier/pose_detection_tflite
+repository: https://github.com/hugocornellier/hand_detection_tflite
+homepage: https://github.com/hugocornellier/hand_detection_tflite
 
 topics:
   - tflite
-  - pose-detection
+  - hand-detection
   - computer-vision
   - flutter-plugin
 
@@ -18,7 +18,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  image: ^4.5.4
+  opencv_dart: ^2.1.0
   tflite_flutter_custom: ^1.1.0
   path: ^1.9.1
   meta: ^1.15.0
@@ -32,31 +32,25 @@ dev_dependencies:
 
 flutter:
   assets:
-    - assets/models/pose_detection.tflite
-    - assets/models/pose_landmark_lite.tflite
-    - assets/models/pose_landmark_full.tflite
-    - assets/models/pose_landmark_heavy.tflite
-    - assets/models/yolov8n_float32.tflite
+    - assets/models/hand_detection.tflite
+    - assets/models/hand_landmark_full.tflite
     - assets/bin/libtensorflowlite_c-win.dll
     - assets/bin/libtensorflowlite_c-linux.so
-    - assets/samples/multi1.jpg
-    - assets/samples/pose1.jpg
-    - assets/samples/pose2.jpg
-    - assets/samples/pose3.jpg
-    - assets/samples/pose4.jpg
-    - assets/samples/pose5.jpg
-    - assets/samples/pose6.jpg
-    - assets/samples/pose7.jpg
+    - assets/samples/2-hands.png
+    - assets/samples/two-palms.png
+    - assets/samples/img-standing.png
+    - assets/samples/istockphoto-462908027-612x612.jpg
+    - assets/samples/360_F_554788951_fLAy5C8e9bha4caBTWVJN6rvTD0pEVfE.jpg
 
   plugin:
     platforms:
       ios:
-        dartPluginClass: PoseDetectionTfliteDart
+        dartPluginClass: HandDetectionTfliteDart
       android:
-        dartPluginClass: PoseDetectionTfliteDart
+        dartPluginClass: HandDetectionTfliteDart
       macos:
-        pluginClass: PoseDetectionTflitePlugin
+        pluginClass: HandDetectionTflitePlugin
       windows:
-        pluginClass: PoseDetectionTflitePlugin
+        pluginClass: HandDetectionTflitePlugin
       linux:
-        pluginClass: PoseDetectionTflitePlugin
+        pluginClass: HandDetectionTflitePlugin
