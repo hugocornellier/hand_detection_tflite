@@ -202,9 +202,8 @@ class HandDetector {
     final List<PalmDetection> palms = await _palm.detectOnMat(image);
 
     // Limit detections
-    final limitedPalms = palms.length > maxDetections
-        ? palms.sublist(0, maxDetections)
-        : palms;
+    final limitedPalms =
+        palms.length > maxDetections ? palms.sublist(0, maxDetections) : palms;
 
     if (mode == HandMode.boxes) {
       return _palmsToHands(image, limitedPalms, []);

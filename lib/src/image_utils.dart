@@ -34,8 +34,8 @@ class ImageUtils {
     }
 
     // Resize with bilinear interpolation (INTER_LINEAR)
-    final resizedImage = cv.resize(image, (newWidth, newHeight),
-        interpolation: cv.INTER_LINEAR);
+    final resizedImage =
+        cv.resize(image, (newWidth, newHeight), interpolation: cv.INTER_LINEAR);
 
     // Calculate padding for each side
     final padTop = (resizeHeight - newHeight) ~/ 2;
@@ -89,7 +89,8 @@ class ImageUtils {
     final angleDegrees = palm.rotation * 180.0 / math.pi;
 
     // Get rotation matrix centered at the palm center
-    final rotMat = cv.getRotationMatrix2D(cv.Point2f(cx, cy), angleDegrees, 1.0);
+    final rotMat =
+        cv.getRotationMatrix2D(cv.Point2f(cx, cy), angleDegrees, 1.0);
 
     // Adjust translation to crop around the output center
     final outCx = size / 2.0;
@@ -160,8 +161,7 @@ class ImageUtils {
     final int dw = (tw - nw) ~/ 2;
     final int dh = (th - nh) ~/ 2;
 
-    final resized =
-        cv.resize(src, (nw, nh), interpolation: cv.INTER_LINEAR);
+    final resized = cv.resize(src, (nw, nh), interpolation: cv.INTER_LINEAR);
 
     // Calculate padding for right/bottom to ensure exact target dimensions
     final dwRight = tw - nw - dw;

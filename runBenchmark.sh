@@ -18,7 +18,7 @@ cd "$SCRIPT_DIR/example"
 
 # Run tests and capture output
 TEMP_OUTPUT=$(mktemp)
-flutter test integration_test/pose_detector_benchmark_test.dart -d macos --timeout 60m 2>&1 | tee "$TEMP_OUTPUT"
+flutter test integration_test/hand_detector_benchmark_test.dart -d macos --timeout 60m 2>&1 | tee "$TEMP_OUTPUT"
 
 # Extract JSON blocks and save to files
 echo ""

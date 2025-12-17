@@ -23,10 +23,12 @@ class _InterpreterInstance {
   final Float32List inputBuffer;
 
   // Pre-allocated output buffers - matches Python hand landmark model outputs
-  final List<List<double>> outputLandmarks; // [1, 63] - 21 landmarks × 3 (x, y, z)
+  final List<List<double>>
+      outputLandmarks; // [1, 63] - 21 landmarks × 3 (x, y, z)
   final List<List<double>> outputScore; // [1, 1] - hand confidence score
   final List<List<double>> outputHandedness; // [1, 1] - 0=left, 1=right
-  final List<List<double>> outputWorldLandmarks; // [1, 63] - 21 world landmarks × 3
+  final List<List<double>>
+      outputWorldLandmarks; // [1, 63] - 21 world landmarks × 3
 
   _InterpreterInstance({
     required this.interpreter,
@@ -196,7 +198,9 @@ class HandLandmarkModelRunner {
       final outputLandmarks = [List<double>.filled(63, 0.0, growable: false)];
       final outputScore = [List<double>.filled(1, 0.0, growable: false)];
       final outputHandedness = [List<double>.filled(1, 0.0, growable: false)];
-      final outputWorldLandmarks = [List<double>.filled(63, 0.0, growable: false)];
+      final outputWorldLandmarks = [
+        List<double>.filled(63, 0.0, growable: false)
+      ];
 
       _interpreterPool.add(_InterpreterInstance(
         interpreter: interpreter,

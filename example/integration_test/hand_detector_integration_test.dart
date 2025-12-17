@@ -96,7 +96,8 @@ void main() {
   });
 
   group('HandDetector - Error Handling', () {
-    testWidgets('should throw StateError when detect() called before initialize',
+    testWidgets(
+        'should throw StateError when detect() called before initialize',
         (tester) async {
       final detector = HandDetector();
       final bytes = TestUtils.createDummyImageBytes();

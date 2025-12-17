@@ -103,8 +103,7 @@ void main() {
       );
     });
 
-    test(
-        'should throw StateError when detectOnMat() called before initialize',
+    test('should throw StateError when detectOnMat() called before initialize',
         () async {
       final detector = HandDetector();
       final mat = cv.Mat.zeros(100, 100, cv.MatType.CV_8UC3);
@@ -448,27 +447,27 @@ void main() {
 
       // Verify we can access all 21 hand landmark types
       final landmarkTypes = [
-        HandLandmarkType.wrist,           // 0
-        HandLandmarkType.thumbCMC,        // 1
-        HandLandmarkType.thumbMCP,        // 2
-        HandLandmarkType.thumbIP,         // 3
-        HandLandmarkType.thumbTip,        // 4
-        HandLandmarkType.indexFingerMCP,  // 5
-        HandLandmarkType.indexFingerPIP,  // 6
-        HandLandmarkType.indexFingerDIP,  // 7
-        HandLandmarkType.indexFingerTip,  // 8
+        HandLandmarkType.wrist, // 0
+        HandLandmarkType.thumbCMC, // 1
+        HandLandmarkType.thumbMCP, // 2
+        HandLandmarkType.thumbIP, // 3
+        HandLandmarkType.thumbTip, // 4
+        HandLandmarkType.indexFingerMCP, // 5
+        HandLandmarkType.indexFingerPIP, // 6
+        HandLandmarkType.indexFingerDIP, // 7
+        HandLandmarkType.indexFingerTip, // 8
         HandLandmarkType.middleFingerMCP, // 9
         HandLandmarkType.middleFingerPIP, // 10
         HandLandmarkType.middleFingerDIP, // 11
         HandLandmarkType.middleFingerTip, // 12
-        HandLandmarkType.ringFingerMCP,   // 13
-        HandLandmarkType.ringFingerPIP,   // 14
-        HandLandmarkType.ringFingerDIP,   // 15
-        HandLandmarkType.ringFingerTip,   // 16
-        HandLandmarkType.pinkyMCP,        // 17
-        HandLandmarkType.pinkyPIP,        // 18
-        HandLandmarkType.pinkyDIP,        // 19
-        HandLandmarkType.pinkyTip,        // 20
+        HandLandmarkType.ringFingerMCP, // 13
+        HandLandmarkType.ringFingerPIP, // 14
+        HandLandmarkType.ringFingerDIP, // 15
+        HandLandmarkType.ringFingerTip, // 16
+        HandLandmarkType.pinkyMCP, // 17
+        HandLandmarkType.pinkyPIP, // 18
+        HandLandmarkType.pinkyDIP, // 19
+        HandLandmarkType.pinkyTip, // 20
       ];
 
       expect(landmarkTypes.length, 21);

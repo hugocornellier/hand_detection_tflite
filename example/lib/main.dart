@@ -51,7 +51,8 @@ class FpsCalculator {
 
   double get() {
     final currentTime = DateTime.now();
-    final differentTime = currentTime.difference(_startTime).inMicroseconds / 1000.0; // milliseconds
+    final differentTime = currentTime.difference(_startTime).inMicroseconds /
+        1000.0; // milliseconds
     _startTime = currentTime;
 
     _diffTimes.add(differentTime);
@@ -204,7 +205,8 @@ class _StillImageScreenState extends State<StillImageScreen> {
     detectorConf: 0.6,
     maxDetections: 10,
     minLandmarkScore: 0.5,
-    performanceConfig: PerformanceConfig.disabled, // Disabled XNNPACK to fix initialization error
+    performanceConfig: PerformanceConfig
+        .disabled, // Disabled XNNPACK to fix initialization error
   );
   final ImagePicker _picker = ImagePicker();
 
@@ -705,21 +707,16 @@ class CameraScreen extends StatefulWidget {
 
 class _CameraScreenState extends State<CameraScreen> {
   CameraMacOSController? _cameraController;
-  final HandDetector _handDetector = HandDetector(
-    mode: HandMode.boxesAndLandmarks,
-    landmarkModel: HandLandmarkModel.full,
-    detectorConf: 0.6,
-    maxDetections: 10,
-    minLandmarkScore: 0.5,
-    performanceConfig: const PerformanceConfig.xnnpack(),
-  );
+  late HandDetector _handDetector;
+  int _maxHands = 2;
 
   bool _isInitialized = false;
   bool _isProcessing = false;
   List<Hand> _currentHands = [];
   String? _errorMessage;
   int _frameCount = 0;
-  static const int _frameSkip = 1; // Process every frame (matches Python default)
+  static const int _frameSkip =
+      1; // Process every frame (matches Python default)
   Size? _cameraSize;
 
   // FPS calculation
@@ -729,7 +726,19 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void initState() {
     super.initState();
+    _createHandDetector();
     _initializeHandDetector();
+  }
+
+  void _createHandDetector() {
+    _handDetector = HandDetector(
+      mode: HandMode.boxesAndLandmarks,
+      landmarkModel: HandLandmarkModel.full,
+      detectorConf: 0.6,
+      maxDetections: _maxHands,
+      minLandmarkScore: 0.5,
+      performanceConfig: const PerformanceConfig.xnnpack(),
+    );
   }
 
   Future<void> _initializeHandDetector() async {
@@ -744,6 +753,20 @@ class _CameraScreenState extends State<CameraScreen> {
         _errorMessage = 'Failed to initialize hand detector: $e';
       });
     }
+  }
+
+  Future<void> _updateMaxHands(int newMax) async {
+    if (newMax == _maxHands) return;
+
+    setState(() {
+      _isInitialized = false;
+      _maxHands = newMax;
+    });
+
+    // Dispose old detector and create new one
+    _handDetector.dispose();
+    _createHandDetector();
+    await _initializeHandDetector();
   }
 
   void _onCameraInitialized(CameraMacOSController controller) {
@@ -779,7 +802,8 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       // Convert ARGB (macOS camera format) to BGR cv.Mat
       // macOS camera outputs ARGB, OpenCV expects BGR
-      final mat = cv.Mat.zeros(imageData.height, imageData.width, cv.MatType.CV_8UC3);
+      final mat =
+          cv.Mat.zeros(imageData.height, imageData.width, cv.MatType.CV_8UC3);
       final bytes = imageData.bytes;
       final stride = imageData.bytesPerRow;
       final matData = mat.data;
@@ -809,7 +833,8 @@ class _CameraScreenState extends State<CameraScreen> {
       cv.Mat processedMat = mat;
       const int maxDim = 640;
       if (mat.cols > maxDim || mat.rows > maxDim) {
-        final double scale = maxDim / (mat.cols > mat.rows ? mat.cols : mat.rows);
+        final double scale =
+            maxDim / (mat.cols > mat.rows ? mat.cols : mat.rows);
         processedMat = cv.resize(
           mat,
           ((mat.cols * scale).toInt(), (mat.rows * scale).toInt()),
@@ -851,6 +876,27 @@ class _CameraScreenState extends State<CameraScreen> {
       appBar: AppBar(
         title: const Text('Live Hand Detection'),
         actions: [
+          // Max hands slider
+          if (_isInitialized)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Max: '),
+                SizedBox(
+                  width: 120,
+                  child: Slider(
+                    value: _maxHands.toDouble(),
+                    min: 1,
+                    max: 10,
+                    divisions: 9,
+                    label: '$_maxHands',
+                    onChanged: (value) => _updateMaxHands(value.toInt()),
+                  ),
+                ),
+                Text('$_maxHands'),
+                const SizedBox(width: 16),
+              ],
+            ),
           if (_isInitialized && _cameraController != null)
             Padding(
               padding: const EdgeInsets.all(8.0),

@@ -197,7 +197,8 @@ void main() {
         // First pixel should be RGB (0, 0, 1) after BGR->RGB conversion
         expect(tensor[0], closeTo(0.0, 0.01)); // R = 0
         expect(tensor[1], closeTo(0.0, 0.01)); // G = 0
-        expect(tensor[2], closeTo(1.0, 0.01)); // B = 1 (was 255 in BGR B channel)
+        expect(
+            tensor[2], closeTo(1.0, 0.01)); // B = 1 (was 255 in BGR B channel)
       } finally {
         mat.dispose();
       }

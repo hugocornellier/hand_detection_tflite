@@ -30,8 +30,7 @@ Future main() async {
       }
 
       // access individual landmarks
-      final HandLandmark? wrist =
-          hand.getLandmark(HandLandmarkType.wrist);
+      final HandLandmark? wrist = hand.getLandmark(HandLandmarkType.wrist);
       if (wrist != null) {
         stdout.writeln(
             'Wrist visibility: ${wrist.visibility.toStringAsFixed(2)}');

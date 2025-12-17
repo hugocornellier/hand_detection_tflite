@@ -143,8 +143,7 @@ class PalmDetector {
     if (numStrides == 1) {
       return (minScale + maxScale) / 2;
     } else {
-      return minScale +
-          (maxScale - minScale) * strideIndex / (numStrides - 1);
+      return minScale + (maxScale - minScale) * strideIndex / (numStrides - 1);
     }
   }
 
@@ -198,18 +197,14 @@ class PalmDetector {
       }
 
       final stride = options.strides[layerId];
-      final featureMapHeight =
-          (options.inputSizeHeight / stride).ceil();
-      final featureMapWidth =
-          (options.inputSizeWidth / stride).ceil();
+      final featureMapHeight = (options.inputSizeHeight / stride).ceil();
+      final featureMapWidth = (options.inputSizeWidth / stride).ceil();
 
       for (int y = 0; y < featureMapHeight; y++) {
         for (int x = 0; x < featureMapWidth; x++) {
           for (int anchorId = 0; anchorId < anchorHeight.length; anchorId++) {
-            final xCenter =
-                (x + options.anchorOffsetX) / featureMapWidth;
-            final yCenter =
-                (y + options.anchorOffsetY) / featureMapHeight;
+            final xCenter = (x + options.anchorOffsetX) / featureMapWidth;
+            final yCenter = (y + options.anchorOffsetY) / featureMapHeight;
 
             List<double> newAnchor;
             if (options.fixedAnchorSize) {
@@ -246,7 +241,8 @@ class PalmDetector {
     if (_isInitialized) await dispose();
 
     final options = _createInterpreterOptions(performanceConfig);
-    final interpreter = await Interpreter.fromAsset(assetPath, options: options);
+    final interpreter =
+        await Interpreter.fromAsset(assetPath, options: options);
     _interpreter = interpreter;
     interpreter.allocateTensors();
 
@@ -495,10 +491,14 @@ class PalmDetector {
         //     sqn_rr_center_y = (sqn_rr_center_y * square_standard_size - square_padding_half_size) / image_height
         if (_imageHeight > _imageWidth) {
           // Portrait: padding was added to width, adjust X
-          sqnRrCenterX = (sqnRrCenterX * _squareStandardSize - _squarePaddingHalfSize) / _imageWidth;
+          sqnRrCenterX =
+              (sqnRrCenterX * _squareStandardSize - _squarePaddingHalfSize) /
+                  _imageWidth;
         } else {
           // Landscape: padding was added to height, adjust Y
-          sqnRrCenterY = (sqnRrCenterY * _squareStandardSize - _squarePaddingHalfSize) / _imageHeight;
+          sqnRrCenterY =
+              (sqnRrCenterY * _squareStandardSize - _squarePaddingHalfSize) /
+                  _imageHeight;
         }
 
         palms.add(PalmDetection(
@@ -535,8 +535,10 @@ class PalmDetector {
         if (suppressed[j]) continue;
 
         // Convert normalized coordinates to pixel space (matching Python's approach)
-        final dx = (sorted[i].sqnRrCenterX - sorted[j].sqnRrCenterX) * _imageWidth;
-        final dy = (sorted[i].sqnRrCenterY - sorted[j].sqnRrCenterY) * _imageHeight;
+        final dx =
+            (sorted[i].sqnRrCenterX - sorted[j].sqnRrCenterX) * _imageWidth;
+        final dy =
+            (sorted[i].sqnRrCenterY - sorted[j].sqnRrCenterY) * _imageHeight;
         final distance = math.sqrt(dx * dx + dy * dy);
 
         // Use 200px threshold like Python (not normalized)
